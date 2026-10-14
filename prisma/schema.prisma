@@ -1,0 +1,68 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // url is configured in prisma7.config.ts
+}
+
+model BusinessOwner {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  shops     Shop[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Shop {
+  id              String     @id @default(uuid())
+  name            String
+  businessOwnerId String
+  businessOwner   BusinessOwner @relation(fields: [businessOwnerId], references: [id])
+  settings        Setting?
+  knowledgeSources KnowledgeSource[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model Setting {
+  id                   String   @id @default(uuid())
+  shopId               String   @unique
+  shop                 Shop     @relation(fields: [shopId], references: [id])
+  autoReply            Boolean  @default(false)
+  welcomeMessage       String?
+  systemPrompt         String?
+  replyTone            String?  // 'professional', 'friendly', 'casual', etc.
+  confidenceThreshold  Float?   @default(0.7)  // Between 0 and 1
+  fallbackMessage      String?  // Message to send when confidence is too low
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model KnowledgeSource {
+  id        String   @id @default(uuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id])
+  name      String
+  type      String   // 'pdf', 'url', 'text', etc.
+  source    String   // URL, file path, or text content
+  status    String   @default("pending") // 'pending', 'processing', 'ready', 'error'
+  documentChunks DocumentChunk[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DocumentChunk {
+  id                String   @id @default(uuid())
+  knowledgeSourceId String
+  knowledgeSource   KnowledgeSource @relation(fields: [knowledgeSourceId], references: [id])
+  content           String
+  embedding         Float[]
+  metadata          Json?
+  createdAt         DateTime @default(now())
+}
