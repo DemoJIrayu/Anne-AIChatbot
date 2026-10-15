@@ -25,23 +25,27 @@
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "dotenv": "16.4.5",
-    "express": "4.19.2",
+    "express": "4.22.3",
     "pg": "^8.23.1",
     "prisma": "^7.10.0"
   },
   "devDependencies": {
     "@types/express": "4.17.21",
     "@types/node": "20.14.10",
-    "@typescript-eslint/eslint-plugin": "8.15.0",
-    "@typescript-eslint/parser": "8.15.0",
-    "eslint": "9.15.0",
+    "@typescript-eslint/eslint-plugin": "8.71.1",
+    "@typescript-eslint/parser": "8.71.1",
+    "eslint": "9.39.5",
     "prettier": "3.4.1",
     "supertest": "7.0.0",
     "ts-node": "10.9.2",
     "typescript": "5.5.3",
-    "vitest": "1.6.0"
+    "vitest": "4.1.11"
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.2",
+    "mysql2": "3.24.5"
   }
 }
