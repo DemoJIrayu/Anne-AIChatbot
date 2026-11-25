@@ -9,13 +9,17 @@ const PORT = parseInt(portValue, 10);
 
 // Check if PORT is a valid number and within valid range
 if (isNaN(PORT) || portValue.trim() !== portValue || !/^\d+$/.test(portValue)) {
-  console.error(`Invalid PORT value: ${portValue}. PORT must be a valid number without trailing characters.`);
+  console.error(
+    `Invalid PORT value: ${portValue}. PORT must be a valid number without trailing characters.`
+  );
   process.exit(1);
 }
 
 // Check if PORT is within valid TCP port range (1-65535)
 if (PORT < 1 || PORT > 65535) {
-  console.error(`Invalid PORT value: ${PORT}. PORT must be between 1 and 65535.`);
+  console.error(
+    `Invalid PORT value: ${PORT}. PORT must be between 1 and 65535.`
+  );
   process.exit(1);
 }
 
@@ -39,8 +43,13 @@ if (!DATABASE_URL) {
 }
 
 // Check that DATABASE_URL starts with postgres:// or postgresql://
-if (!DATABASE_URL.startsWith('postgres://') && !DATABASE_URL.startsWith('postgresql://')) {
-  console.error('DATABASE_URL must start with "postgres://" or "postgresql://".');
+if (
+  !DATABASE_URL.startsWith('postgres://') &&
+  !DATABASE_URL.startsWith('postgresql://')
+) {
+  console.error(
+    'DATABASE_URL must start with "postgres://" or "postgresql://".'
+  );
   process.exit(1);
 }
 
@@ -52,8 +61,13 @@ export const validateDatabaseUrl = (databaseUrl: string | undefined) => {
     throw new Error('DATABASE_URL is required but was not provided.');
   }
 
-  if (!databaseUrl.startsWith('postgres://') && !databaseUrl.startsWith('postgresql://')) {
-    throw new Error('DATABASE_URL must start with "postgres://" or "postgresql://".');
+  if (
+    !databaseUrl.startsWith('postgres://') &&
+    !databaseUrl.startsWith('postgresql://')
+  ) {
+    throw new Error(
+      'DATABASE_URL must start with "postgres://" or "postgresql://".'
+    );
   }
 
   return databaseUrl;

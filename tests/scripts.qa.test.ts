@@ -1,7 +1,15 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { get as httpGet } from 'node:http';
 import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +25,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  *   - the built server must boot and serve GET /health,
  *   - an invalid PORT must fail fast with a clear message,
  *   - `npm run lint` and `npm run format:check` must exit 0.
+ *   - the Prettier gate is scoped by .prettierignore: generated/protected paths
+ *     (dist/, node_modules/, .github/) are skipped, while src/, tests/ and the
+ *     config files must still be checked, so the gate cannot be "fixed" by
+ *     ignoring the code it is supposed to protect.
  */
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const VALID_DATABASE_URL =
@@ -265,15 +277,138 @@ describe('npm script gates in the repository', () => {
     expect(result.status, result.stdout + result.stderr).toBe(0);
   }, 240_000);
 
-  // BUG: `npm run format:check` (prettier --check .) fails on files added by
-  // this change: package.json, prisma7.config.ts, src/config/env.ts,
-  // src/db/prisma.ts and tests/config/env.test.ts.
-  it.fails(
-    'npm run format:check exits 0',
-    () => {
-      const result = runSync('npm', ['run', 'format:check'], { cwd: repoRoot });
-      expect(result.status, result.stdout + result.stderr).toBe(0);
-    },
-    240_000
-  );
+  it('npm run format:check exits 0', () => {
+    const result = runSync('npm', ['run', 'format:check'], { cwd: repoRoot });
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+  }, 240_000);
+});
+
+const prettierBin = join(repoRoot, 'node_modules', '.bin', 'prettier');
+const prettierIgnoreFile = join(repoRoot, '.prettierignore');
+
+// Hand-written code/config that must keep being format-checked.
+const FORMAT_CHECKED_PATHS = [
+  'src/app.ts',
+  'src/config/env.ts',
+  'src/db/prisma.ts',
+  'tests/config/env.test.ts',
+  'tests/scripts.qa.test.ts',
+  'prisma7.config.ts',
+  'package.json',
+  'tsconfig.json',
+  'eslint.config.mjs',
+];
+
+// Generated or protected paths this change deliberately excluded.
+const FORMAT_IGNORED_PATHS = [
+  '.github/workflows/devsecops.yml',
+  '.github/dependabot.yml',
+  'dist/server.js',
+  'dist/nested/app.ts',
+  'node_modules/prettier/index.cjs',
+];
+
+describe('prettier format gate scope (.prettierignore)', () => {
+  it('ignores only generated/protected paths, never src/, tests/ or the configs', async () => {
+    const { getFileInfo } = await import('prettier');
+
+    for (const relativePath of FORMAT_CHECKED_PATHS) {
+      const info = await getFileInfo(join(repoRoot, relativePath), {
+        ignorePath: [prettierIgnoreFile],
+      });
+      expect(info.ignored, `${relativePath} must stay format-checked`).toBe(
+        false
+      );
+    }
+
+    for (const relativePath of FORMAT_IGNORED_PATHS) {
+      const info = await getFileInfo(join(repoRoot, relativePath), {
+        ignorePath: [prettierIgnoreFile],
+      });
+      expect(info.ignored, `${relativePath} should be ignored`).toBe(true);
+    }
+  });
+
+  it('still fails on unformatted src/tests code while skipping dist/ and .github/', () => {
+    // A throwaway copy of the repository (no node_modules) so a deliberately
+    // misformatted file can be introduced without touching the real tree.
+    const workDir = mkdtempSync(join(tmpdir(), 'qa-format-gate-'));
+    try {
+      for (const entry of [
+        '.prettierrc',
+        '.prettierignore',
+        'eslint.config.mjs',
+        'prisma7.config.ts',
+        'tsconfig.json',
+        'tsconfig.test.json',
+        'package.json',
+        'prisma',
+        'src',
+        'tests',
+        '.github',
+      ]) {
+        cpSync(join(repoRoot, entry), join(workDir, entry), {
+          recursive: true,
+        });
+      }
+
+      const checkAll = () =>
+        runSync(prettierBin, ['--check', '.'], {
+          cwd: workDir,
+          timeout: 120_000,
+        });
+
+      const baseline = checkAll();
+      expect(baseline.status, baseline.stdout + baseline.stderr).toBe(0);
+
+      // Ignored trees may contain arbitrarily bad formatting: this repository's
+      // .github/ files are not Prettier-clean, and neither is this generated
+      // dist/ output, yet the gate must stay green.
+      mkdirSync(join(workDir, 'dist'), { recursive: true });
+      writeFileSync(
+        join(workDir, 'dist', 'server.js'),
+        'const generated={a:1,b:[1,2,3]};\n'
+      );
+      mkdirSync(join(workDir, '.github', 'workflows'), { recursive: true });
+      writeFileSync(
+        join(workDir, '.github', 'workflows', 'qa.yml'),
+        'name:   qa\non: push\njobs:  {}\n'
+      );
+
+      const ignoredOnly = checkAll();
+      expect(ignoredOnly.status, ignoredOnly.stdout + ignoredOnly.stderr).toBe(
+        0
+      );
+
+      // Real source code must not escape the gate.
+      writeFileSync(
+        join(workDir, 'src', 'qa_unformatted.ts'),
+        'const qaValue={a:1,b:[1,2,3]};\nexport default qaValue;\n'
+      );
+
+      const drift = checkAll();
+      const driftOutput = drift.stdout + drift.stderr;
+      expect(drift.status).not.toBe(0);
+      expect(driftOutput).toContain('qa_unformatted.ts');
+      expect(driftOutput).not.toContain('qa.yml');
+      expect(driftOutput).not.toContain('dist/server.js');
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  }, 240_000);
+
+  it('the files changed by this pull request are Prettier-clean', () => {
+    const changedFiles = [
+      'prisma7.config.ts',
+      'src/config/env.ts',
+      'src/db/prisma.ts',
+      'tests/config/env.test.ts',
+      'tests/scripts.qa.test.ts',
+    ];
+    const result = runSync(prettierBin, ['--check', ...changedFiles], {
+      cwd: repoRoot,
+      timeout: 120_000,
+    });
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+  }, 240_000);
 });
