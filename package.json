@@ -22,9 +22,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@prisma/adapter-pg": "^7.10.1",
-    "@prisma/client": "^7.10.1",
-    "dotenv": "16.4.5",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "dotenv": "18.0.7",
     "express": "4.22.3",
     "pg": "^8.23.1",
     "prisma": "^7.10.1"
@@ -46,6 +46,9 @@
   },
   "overrides": {
     "deepmerge-ts": "8.0.2",
-    "mysql2": "3.24.5"
+    "mysql2": "3.24.5",
+    "effect": "3.22.4",
+    "body-parser": "1.20.9",
+    "fast-uri": "3.1.9"
   }
 }
